@@ -40,13 +40,17 @@ msg "Rebuilding initrd"
 find . -print0 | cpio -H newc -o -0 | gzip -9 > "$initrd"
 )
 
+msg "Setting up automatic booting to preseed"
+sed -i 's/timeout 0/timeout 5/' "$iso_dir/isolinux/isolinux.cfg"
+sed -i '/^\tappend/d' "$iso_dir/isolinux/txt.cfg"
+printf '\tappend vga=788 initrd=/install.amd/initrd.gz auto text\n' >> "$iso_dir/isolinux/txt.cfg"
+
 if [[ $input_file_dir ]]; then
     msg "Adding custom files to 'extra' dir on image"
     cp -a "$input_file_dir" "$iso_dir/extra"
 fi
 
 msg "Generating md5sums"
-
 ( cd "$iso_dir" && find . -type f -exec md5sum {} + > md5sum.txt )
 
 msg "Generating output ISO image"
