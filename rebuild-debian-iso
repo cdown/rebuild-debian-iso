@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+shopt -s globstar
+
+input_iso=$1
+output_iso=$2
+preseed=$3
+input_file_dir=$4
+
+msg() {
+    printf '>>> %s\n' "$@"
+}
+
+if ! [[ -r $input_iso && -r $preseed ]]; then
+    printf '%s\n' \
+        "Usage: ${0##*/} <input-iso> <output-iso> <preseed-file> [file-dir]" \
+        "" \
+        "input-iso:    the debian iso to modify" \
+        "output-iso:   where to store the modified iso" \
+        "preseed-file: the location of a preseed file to inject" \
+        "file-dir:     an optional directory to be put at extra/ in the iso"
+    exit 1
+fi
+
+iso_dir=$(mktemp -d)
+initrd_dir=$(mktemp -d)
+
+msg "Extracting source image"
+bsdtar -C "$iso_dir" -xf "$input_iso"
+
+initrd=$iso_dir/install.amd/initrd.gz
+
+(
+cd "$initrd_dir"
+msg "Extracting initrd"
+gzip -d < "$initrd" | cpio -i --no-absolute-filenames
+msg "Injecting preseed"
+cp "$preseed" "$initrd_dir/preseed.cfg"
+msg "Rebuilding initrd"
+find . -print0 | cpio -H newc -o -0 | gzip -9 > "$initrd"
+)
+
+if [[ $input_file_dir ]]; then
+    msg "Adding custom files to 'extra' dir on image"
+    cp -a "$input_file_dir" "$iso_dir/extra"
+fi
+
+msg "Generating md5sums"
+
+( cd "$iso_dir" && find . -type f -exec md5sum {} + > md5sum.txt )
+
+msg "Generating output ISO image"
+mkisofs -quiet \
+    -o "$output_iso" \
+    -r -J -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -b isolinux/isolinux.bin -c isolinux/boot.cat \
+    "$iso_dir"
+
+msg "Removing temporary directories"
+rm -rf "$iso_dir" "$initrd_dir"
+
+msg "Output ISO generated: $output_iso"
