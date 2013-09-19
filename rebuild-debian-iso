@@ -34,9 +34,14 @@ initrd=$iso_dir/install.amd/initrd.gz
 cd "$initrd_dir"
 msg "Extracting initrd"
 gzip -d < "$initrd" | cpio -i --no-absolute-filenames
+)
+
 msg "Injecting preseed"
 cp "$preseed" "$initrd_dir/preseed.cfg"
+
+(
 msg "Rebuilding initrd"
+cd "$initrd_dir"
 find . -print0 | cpio -H newc -o -0 | gzip -9 > "$initrd"
 )
 
